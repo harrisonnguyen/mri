@@ -1,0 +1,1 @@
+sudo mount -t cifs //research-data.shared.sydney.edu.au/SMS/PRJ-NeuroImg /RDSMount -o user=hngu4068,dom=shared

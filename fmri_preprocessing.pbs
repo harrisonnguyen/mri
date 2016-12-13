@@ -1,0 +1,27 @@
+#! /bin/bash
+#perform the python script that processes the fmri images
+#project name
+#PBS -P RDS-SMS-NEUROIMG-RW
+#name of job
+#PBS -N fMRI-Preprocessing-Harrison
+#number of nodes and processes we want to use
+#PBS -l nodes=1:ppn=2
+#maximum time
+#PBS -l walltime=00:20:00
+#amount of ram
+#PBS -l pmem=16gb
+#assign to queue compute, highmem, gpu
+#standard error and output to same file
+#PBS -j oe
+#PBS -M harrison.nguyen@sydney.edu.au
+#send email when job aborts, begins and ends
+#PBS -m abe
+
+#load modules
+module load python
+module load fsl
+
+python /home/hngu4068/SMART/fmri_preprocessing.py
+mv /scratch/RDS-SMS-NEUROIMG-RW/harrison/working_dir/prelim/example_func2standard_full /project/RDS-SMS-NEUROIMG-RW/harrison
+
+mv /scratch/RDS-SMS-NEUROIMG-RW/harrison/working_dir/prelim/highres2standard /project/RDS-SMS-NEUROIMG-RW/harrison

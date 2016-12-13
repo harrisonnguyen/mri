@@ -1,0 +1,5 @@
+.ipynb_checkpoints/*
+design_FU1.fsf
+*.pyc
+working_dir/
+pyrcca/*
