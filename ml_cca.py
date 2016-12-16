@@ -71,8 +71,9 @@ def cho_log_det(L):
     return 2 * np.sum(np.log(L.diagonal()))
 
 class MaximumLikelihoodCCA(object):
-    def __init__(self,n_components = 2):
+    def __init__(self,n_components = 2,reg = 0):
         self.n_components = n_components
+        self.reg = reg
 
     def _qr_CCA(self):
         """ Performs CCA through QR decomposition"""
@@ -80,14 +81,29 @@ class MaximumLikelihoodCCA(object):
         q2,r2 = np.linalg.qr(self.Y)
 
         U,s,Vh = np.linalg.svd(np.dot(q1.T,q2))
-        a = np.linalg.solve(r1,U[:,:self.n_components])
-        b = np.linalg.solve(r2,Vh.T[:,:self.n_components])
+        a = np.linalg.lstsq(r1,U[:,:self.n_components])[0]
+        b = np.linalg.lstsq(r2,Vh.T[:,:self.n_components])[0]
+        #a = U[:,:self.n_components]
+        #b = Vh.T[:,:self.n_components]
+        #print b.shape
+        #print Vh.T[:,:self.n_components].shape
         return a,s[:self.n_components],b
     
     def _CCA(self):
-        cca = rcca.CCA(kernelcca = False, reg=0,numCC = self.n_components)
+        cca = rcca.CCA(kernelcca = False, reg=self.reg,numCC = self.n_components)
         cca.train([self.X,self.Y])
         return cca.ws[0],cca.cancorrs,cca.ws[1]
+    
+    def _svd_CCA(self):
+        u1,s1,v1 = np.linalg.svd(self.X,full_matrices=False)
+        u2,s2,v2 = np.linalg.svd(self.Y,full_matrices=False)
+        U,S,Vh = np.linalg.svd(np.dot(u1.T,u2))
+        temp1 = np.linalg.solve(np.diag(s1),U[:,:self.n_components])
+        a = np.dot(v1,temp1)
+        temp2 = np.linalg.solve(np.diag(s2),Vh.T[:,:self.n_components])
+        b = np.dot(v2,temp2)
+        return a,S[:self.n_components],b
+        
 
     def fit(self,X,Y):
         """ Fit the model to the data"""
@@ -98,6 +114,7 @@ class MaximumLikelihoodCCA(object):
         #z = np.concatenate((self.X,self.Y)) 
         #Each row represents a variable and column represents sample
         # X & Y must have the same number of samples
+        """
         C = np.cov(z)
             
         sx = self.X.shape[1] #find the dimensions of X and Y
@@ -108,21 +125,30 @@ class MaximumLikelihoodCCA(object):
         self.Cxy = C[0:sx,sx:sx+sy]
         self.Cyx = self.Cxy.T
         self.Cyy = C[sx:,sx:]
-
-        self.a,s,self.b = self._qr_CCA()
-        #self.a,s,self.b = self._CCA()
+        """
+        self.sx = self.X.shape[1] #find the dimensions of X and Y
+        self.sy = self.Y.shape[1]
+        self.n_samples = X.shape[0]
+        #self.a,s,self.b = self._qr_CCA()
+        self.a,s,self.b = self._CCA()
+        #self.a,s,self.b = self._svd_CCA()
         self.M1 = np.diag(np.sqrt(s))
         self.M2 = self.M1
         self.Pd = s
-
         #equations in theorem 2
-        self.W1 = np.dot(np.dot(self.Cxx,self.a),self.M1)
-        self.W2 = np.dot(np.dot(self.Cyy,self.b),self.M2)
-        
-        self.Phi1 = self.Cxx - np.dot(self.W1,self.W1.T)
-        self.Phi2 = self.Cyy - np.dot(self.W2,self.W2.T)
         self.mu1 = np.mean(self.X,axis = 0)
         self.mu2 = np.mean(self.Y,axis = 0)
+        diff_X = self.X - self.mu1
+        diff_Y = self.Y - self.mu2
+
+        self.W1 = np.dot(diff_X.T,np.dot(diff_X,np.dot(self.a,self.M1)))/(self.n_samples-1)
+        self.W2 = np.dot(diff_Y.T,np.dot(diff_Y,np.dot(self.b,self.M2)))/(self.n_samples-1)
+        #self.W1 = np.dot(np.dot(self.Cxx,self.a),self.M1)
+        #self.W2 = np.dot(np.dot(self.Cyy,self.b),self.M2)
+        
+        #self.Phi1 = self.Cxx - np.dot(self.W1,self.W1.T)
+        #self.Phi2 = self.Cyy - np.dot(self.W2,self.W2.T)
+
 
     def transform(self):
         self.E_z_x = np.dot(np.dot(self.X - self.mu1,self.a),self.M1)
@@ -148,3 +174,15 @@ class MaximumLikelihoodCCA(object):
             self.E_z_xy[i,:] = np.dot(np.dot(M.T,mid_matrix),U_12d).T
 
         self.var_z_xy = np.eye(self.n_components) - np.dot(np.dot(M.T,mid_matrix),M).T
+
+    def predict_X_given_Y(self,Y):
+        E_z_y = np.dot(np.dot(Y - self.mu2,self.b),self.M2)
+        X_mean = np.dot(E_z_y,self.W1.T) + self.mu1
+        return X_mean
+
+    def predict_Y_given_X(self,X):
+        E_z_x = np.dot(np.dot(X - self.mu1,self.a),self.M1)
+        Y_mean = np.dot(E_z_x, self.W2.T) + self.mu2
+        return Y_mean
+
+        
